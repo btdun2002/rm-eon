@@ -1,0 +1,1109 @@
+Project Structure and File Contents:
+main.py
+  Contents of: main.py
+import numpy as np
+import torch
+from environment.eon_env import EONEnvironment
+from environment.topology import create_nsfnet_topology
+from environment.traffic_generator import RandomTrafficGenerator
+from agent.drl_agent import DRLAgent
+from utils.config import config
+from utils.plotting import plot_learning_curve, plot_blocking_rate_comparison
+from utils.logger import setup_logging
+
+
+def train_drl_agent(env, agent, num_episodes, max_steps_per_episode, update_frequency, logger):
+    logger.info("Starting DRL agent training ...")
+    rewards_history = []
+    for episode in range(num_episodes):
+        state = env.reset()
+        episode_rewards = []
+        log_probs = []
+        values = []
+        next_values = []
+        dones = []
+        for step in range(max_steps_per_episode):
+            request = env.get_next_service_request()
+            if not request:
+                break
+
+            action, prob, value = agent.select_action(state)
+            next_state, reward, done, info = env.step(action)
+
+            episode_rewards.append(reward)
+            log_probs.append(prob[0, action].unsqueeze(0))
+            values.append(value)
+
+            next_values.append(agent.actor_critic(
+                torch.FloatTensor(next_state).unsqueeze(0))[1])
+
+            state = next_state
+            if done:
+                break
+
+        avg_reward = np.mean(episode_rewards)
+        rewards_history.append(avg_reward)
+        logger.info(
+            f"Episode {episode+1}/{num_episodes}, Average Reward: {avg_reward:.4f}")
+
+        if (episode + 1) % update_frequency == 0:
+            actor_loss, critic_loss, total_loss = agent.update_model(
+                episode_rewards, log_probs, values, next_values, dones)
+            logger.info(
+                f" Model update - Actor Loss: {actor_loss:.4f}, Critic Loss: {critic_loss:.4f}, Total Loss: {total_loss:.4f}")
+
+    plot_learning_curve(rewards_history, "ActorCriticNetwork",
+                        filepath=config.results_dir + "ActorCriticNetwork_learning_curve.png")
+    agent.save_model(config.model_save_path)
+    return agent
+
+
+def evaluate_algorithms(env, drl_agent, num_episodes, logger):
+    logger.info("Starting evaluation ...")
+    algorithm_names = ["ActorCriticNetwork"]
+    blocking_rates = []
+
+    logger.info("Evaluating ActorCriticNetwork ...")
+    drl_agent.load_model(config.model_save_path)
+    drl_agent.actor_critice.eval()
+    blocked_request_drl = 0
+    for episode in range(num_episodes):
+        state = env.reset()
+        for step in range(config.max_steps_per_episode):
+            request = env.get_next_service_request()
+            if not request:
+                break
+
+            action, _, _ = drl_agent.select_action(state)
+            _, reward, done, info = env.step(action)
+            if info['action_taken'] == 'block':
+                blocked_request_drl += 1
+            if done:
+                break
+
+    blocking_rate_drl = blocked_request_drl / \
+        (num_episodes * config.max_steps_per_episode)
+
+    blocking_rates.append(blocking_rate_drl)
+    logger.info(f"DRL agent blocking rate: {blocking_rate_drl:.4f}")
+
+    plot_blocking_rate_comparison(blocking_rates, algorithm_names,
+                                  filepath=config.results_dir + "blocking_rate_comparison.png")
+    logger.info("Algorithm evaluation finished, blocking rates plot is saved")
+
+
+def main():
+    logger = setup_logging()
+    logger.info("Starting simulation")
+
+    topology_data = create_nsfnet_topology()
+    traffic_generator = RandomTrafficGenerator(
+        config.arrival_rate, config.duration_mean)
+    env = EONEnvironment(
+        topology_data, config.num_wavelengths, traffic_generator)
+
+    state_size = len(env._get_state())
+    action_size = config.num_wavelengths + 1
+    drl_agent = DRLAgent(state_size, action_size,
+                         learning_rate=config.learning_rate, gamma=config.gamma)
+
+    trained_agent = train_drl_agent(
+        env=env, agent=drl_agent, num_episodes=config.num_episodes, max_steps_per_episode=config.max_steps_per_episode, update_frequency=config.update_frequency, logger=logger)
+    evaluate_algorithms(env=env, drl_agent=trained_agent,
+                        num_episodes=config.evaluation_episodes, logger=logger)
+
+    logger.info("Simulation is completed")
+
+
+if __name__ == "__main__":
+    main()
+
+summary.sh
+utils
+  utils/config.py
+    Contents of: utils/config.py
+class Config:
+    def __init__(self):
+        self.topology_type = "NSFNET"
+        self.num_wavelengths = 10
+
+        self.arrival_rate = 0.5
+        self.duration_mean = 5
+
+        self.learning_rate = 1e-3
+        self.gamma = 0.99
+        self.batch_size = 64
+        self.num_episodes = 1000
+        self.max_steps_per_episode = 200
+        self.update_frequency = 4
+
+        self.evaluation_episodes = 100
+
+        self.results_dir = "results/"
+        self.model_save_path = "results/drl_agent_model.d"
+
+
+config = Config()
+
+  utils/plotting.py
+    Contents of: utils/plotting.py
+import matplotlib.pyplot as plt
+
+
+def plot_learning_curve(rewards_history, algorithm_name, filepath="results/learning_curve.png"):
+    plt.figure(figsize=(10, 6))
+    plt.plot(rewards_history)
+    plt.xlabel("Episodes")
+    plt.ylabel("Average Reward")
+    plt.title(f"Learning Curve - {algorithm_name}")
+    plt.grid(True)
+    plt.savefig(filepath)
+    plt.close()
+
+
+def plot_blocking_rate_comparison(blocking_rates, algorithm_names, filepath="results/blocking_rate_comparison.png"):
+    plt.figure(figsize=(10, 6))
+    plt.bar(algorithm_names, blocking_rates)
+    plt.ylabel("Blocking Probability")
+    plt.title("Blocking Rate Comparison")
+    plt.savefig(filepath)
+    plt.close()
+
+  utils/__pycache__
+    utils/__pycache__/logger.cpython-312.pyc
+      (Binary or unsupported file type: application/octet-stream - skipping content)
+    utils/__pycache__/config.cpython-312.pyc
+      (Binary or unsupported file type: application/octet-stream - skipping content)
+    utils/__pycache__/logger.cpython-36.pyc
+      (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+    utils/__pycache__/config.cpython-36.pyc
+      (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+    utils/__pycache__/plotting.cpython-36.pyc
+      (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+    utils/__pycache__/plotting.cpython-312.pyc
+      (Binary or unsupported file type: application/octet-stream - skipping content)
+  utils/__pycache__/logger.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+  utils/__pycache__/config.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+  utils/__pycache__/logger.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+  utils/__pycache__/config.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+  utils/__pycache__/plotting.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+  utils/__pycache__/plotting.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+  utils/logger.py
+    Contents of: utils/logger.py
+import logging
+
+
+def setup_logging(log_file="results/training.log", level=logging.INFO):
+    logger = logging.getLogger(__name__)
+    logger.setLevel(level)
+
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(level)
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    file_handler.setFormatter(formatter)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(level)
+    formatter = logging.Formatter('%(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    return logger
+
+utils/config.py
+  Contents of: utils/config.py
+class Config:
+    def __init__(self):
+        self.topology_type = "NSFNET"
+        self.num_wavelengths = 10
+
+        self.arrival_rate = 0.5
+        self.duration_mean = 5
+
+        self.learning_rate = 1e-3
+        self.gamma = 0.99
+        self.batch_size = 64
+        self.num_episodes = 1000
+        self.max_steps_per_episode = 200
+        self.update_frequency = 4
+
+        self.evaluation_episodes = 100
+
+        self.results_dir = "results/"
+        self.model_save_path = "results/drl_agent_model.d"
+
+
+config = Config()
+
+utils/plotting.py
+  Contents of: utils/plotting.py
+import matplotlib.pyplot as plt
+
+
+def plot_learning_curve(rewards_history, algorithm_name, filepath="results/learning_curve.png"):
+    plt.figure(figsize=(10, 6))
+    plt.plot(rewards_history)
+    plt.xlabel("Episodes")
+    plt.ylabel("Average Reward")
+    plt.title(f"Learning Curve - {algorithm_name}")
+    plt.grid(True)
+    plt.savefig(filepath)
+    plt.close()
+
+
+def plot_blocking_rate_comparison(blocking_rates, algorithm_names, filepath="results/blocking_rate_comparison.png"):
+    plt.figure(figsize=(10, 6))
+    plt.bar(algorithm_names, blocking_rates)
+    plt.ylabel("Blocking Probability")
+    plt.title("Blocking Rate Comparison")
+    plt.savefig(filepath)
+    plt.close()
+
+utils/__pycache__
+  utils/__pycache__/logger.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+  utils/__pycache__/config.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+  utils/__pycache__/logger.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+  utils/__pycache__/config.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+  utils/__pycache__/plotting.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+  utils/__pycache__/plotting.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+utils/__pycache__/logger.cpython-312.pyc
+  (Binary or unsupported file type: application/octet-stream - skipping content)
+utils/__pycache__/config.cpython-312.pyc
+  (Binary or unsupported file type: application/octet-stream - skipping content)
+utils/__pycache__/logger.cpython-36.pyc
+  (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+utils/__pycache__/config.cpython-36.pyc
+  (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+utils/__pycache__/plotting.cpython-36.pyc
+  (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+utils/__pycache__/plotting.cpython-312.pyc
+  (Binary or unsupported file type: application/octet-stream - skipping content)
+utils/logger.py
+  Contents of: utils/logger.py
+import logging
+
+
+def setup_logging(log_file="results/training.log", level=logging.INFO):
+    logger = logging.getLogger(__name__)
+    logger.setLevel(level)
+
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(level)
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    file_handler.setFormatter(formatter)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(level)
+    formatter = logging.Formatter('%(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    return logger
+
+.gitattributes
+  Contents of: .gitattributes
+# Auto detect text files and perform LF normalization
+* text=auto
+
+results
+  results/training.log
+    Contents of: results/training.log
+2025-02-24 00:23:54 - utils.logger - INFO - Starting simulation
+2025-02-24 00:23:55 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 00:48:28 - utils.logger - INFO - Starting simulation
+2025-02-24 00:48:28 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 00:52:19 - utils.logger - INFO - Starting simulation
+2025-02-24 00:52:19 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 00:56:45 - utils.logger - INFO - Starting simulation
+2025-02-24 00:56:45 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 00:56:45 - utils.logger - INFO - Episode 1/1000, Average Reward: nan
+2025-02-24 00:56:45 - utils.logger - INFO - Episode 2/1000, Average Reward: nan
+2025-02-24 01:24:42 - utils.logger - INFO - Starting simulation
+2025-02-24 01:24:42 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 01:24:42 - utils.logger - INFO - Episode 1/1000, Average Reward: nan
+2025-02-24 01:24:42 - utils.logger - INFO - Episode 2/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Starting simulation
+2025-02-24 01:25:45 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 1/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 2/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 3/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 4/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO -  Model update - Actor Loss: nan, Critic Loss: nan, Total Loss: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 5/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 6/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 7/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 8/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO -  Model update - Actor Loss: nan, Critic Loss: nan, Total Loss: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 9/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 10/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 11/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 12/1000, Average Reward: nan
+
+results/training.log
+  Contents of: results/training.log
+2025-02-24 00:23:54 - utils.logger - INFO - Starting simulation
+2025-02-24 00:23:55 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 00:48:28 - utils.logger - INFO - Starting simulation
+2025-02-24 00:48:28 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 00:52:19 - utils.logger - INFO - Starting simulation
+2025-02-24 00:52:19 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 00:56:45 - utils.logger - INFO - Starting simulation
+2025-02-24 00:56:45 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 00:56:45 - utils.logger - INFO - Episode 1/1000, Average Reward: nan
+2025-02-24 00:56:45 - utils.logger - INFO - Episode 2/1000, Average Reward: nan
+2025-02-24 01:24:42 - utils.logger - INFO - Starting simulation
+2025-02-24 01:24:42 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 01:24:42 - utils.logger - INFO - Episode 1/1000, Average Reward: nan
+2025-02-24 01:24:42 - utils.logger - INFO - Episode 2/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Starting simulation
+2025-02-24 01:25:45 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 1/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 2/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 3/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 4/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO -  Model update - Actor Loss: nan, Critic Loss: nan, Total Loss: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 5/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 6/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 7/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 8/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO -  Model update - Actor Loss: nan, Critic Loss: nan, Total Loss: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 9/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 10/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 11/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 12/1000, Average Reward: nan
+
+.git
+requirements.txt
+  Contents of: requirements.txt
+torch
+numpy
+
+project_structure_and_contents.txt
+README.md
+  Contents of: README.md
+Thesis name: Adaptive and Intelligent Resource Management for Elastic Optical Networks
+
+environment
+  environment/traffic_generator.py
+    Contents of: environment/traffic_generator.py
+import random
+
+
+class RandomTrafficGenerator:
+    """
+    arrival_rate (float): Toc do den trung binh cua cac yeu cau dich vu (Poisson)
+    duration_mean (float): Thoi luong trung binh cua cac yeu cau dich vu (Cap so nhan)
+    demand (int): Luong bang thong yeu cau cho moi dich vu
+    """
+
+    def __init__(self, arrival_rate, duration_mean):
+        self.arrival_rate = arrival_rate
+        self.duration_mean = duration_mean
+        self.service_id_counter = 0
+
+    def generate_request(self, nodes):
+        if random.random() < self.arrival_rate:
+            self.service_id_counter += 1
+            source, destination = random.sample(nodes, 2)
+            demand = random.randint(10, 100)
+            duration = random.expovariate(1.0 / self.duration_mean)
+
+            return {
+                'service_id': self.service_id_counter,
+                'source': source,
+                'destination': destination,
+                'demand': demand,
+                'duration': duration
+            }
+        return None
+
+  environment/eon_env.py
+    Contents of: environment/eon_env.py
+import numpy as np
+
+
+class EONEnvironment:
+    def __init__(self, topology_data, num_wavelengths, traffic_generator):
+        """
+        topology_data (dict): (cac node, cac canh, danh sach lien ket)
+        num_wavelengths (int): So luong buoc song moi lien ket
+        traffic_generator (TrafficGenerator)
+        """
+        self.nodes = topology_data['nodes']
+        self.edges = topology_data['edges']
+        self.adjacency_list = topology_data['adjacency_list']
+        self.num_wavelengths = num_wavelengths
+        self.traffic_generator = traffic_generator
+        self.current_service_request = None
+        self.reset()
+
+    def reset(self):
+        self.wavelength_usage = {
+            edge: np.zeros(self.num_wavelengths, dtype=int) for edge in self.edges
+        }
+        self.current_service_request = None
+        self.service_history = []
+        return self._get_state()
+
+    def step(self, action):
+        """
+        Thuc hien action trong environment va tra ve next state, reward, done
+        action (int): Chi so buoc song duoc gan
+        """
+        reward = 0
+        done = False
+        info = {}
+
+        if self.current_service_request is None:
+            done = True
+            reward = 0
+            return self._get_state(), reward, done, info
+
+        if action == -1:
+            reward = -1
+            info['action_taken'] = 'block'
+            info['wavelength_assigned'] = -1
+            self.service_history.append(
+                {'request': self.current_service_request, 'action': 'blocked'})
+            done = True
+        else:
+            wavelength_index = action
+            path = self.current_service_request['path']
+            if self._is_wavelength_available(path, wavelength_index):
+                self._assign_wavelength(path, wavelength_index)
+                reward = 1
+                info['action_taken'] = 'assign'
+                info['wavelength_assigned'] = wavelength_index
+                self.service_history.append(
+                    {'request': self.current_service_request, 'action': 'assigned', 'wavelength': wavelength_index})
+                done = True
+            else:
+                reward = -10
+                info['action_taken'] = 'invalid_assign'
+                info['wavelength_assigned'] = -1
+                done = True
+        self.current_service_request = None
+        return self._get_state(), reward, done, info
+
+    def _get_state(self):
+        return np.array([self.wavelength_usage[edge] for edge in self.edges]).flatten()
+
+    def get_next_service_request(self):
+        self.current_service_request = self.traffic_generator.generate_request(
+            self.nodes)
+        if self.current_service_request:
+            source = self.current_service_request['source']
+            destination = self.current_service_request['destination']
+            self.current_service_request['path'] = self._shortest_path(
+                source, destination)
+        return self.current_service_request
+
+    def _is_wavelength_available(self, path, wavelength_index):
+        for edge in path:
+            if self.wavelength_usage[edge][wavelength_index] == 1:
+                return False
+        return True
+
+    def _assign_wavelength(self, path, wavelength_index):
+        for edge in path:
+            self.wavelength_usage[edge][wavelength_index] = 1
+
+    def _shortest_path(self, source, destination):
+        """
+        Return:
+            list: list of edges
+            None: Neu khong ton tai duong di
+        """
+        distances = {node: float('inf') for node in self.nodes}
+        previous_nodes = {node: None for node in self.nodes}
+        distances[source] = 0
+        unvisited_nodes = set(self.nodes)
+
+        while unvisited_nodes:
+            current_node = min(
+                unvisited_nodes, key=lambda node: distances[node])
+            unvisited_nodes.remove(current_node)
+
+            if distances[current_node] == float('inf'):
+                break
+
+            if current_node == destination:
+                break
+
+            for neighbor in self.adjacency_list[current_node]:
+                weight = 1
+                distance = distances[current_node] + weight
+
+                if distance < distances[neighbor]:
+                    distances[neighbor] = distance
+                    previous_nodes[neighbor] = current_node
+
+        path_edges = []
+        current = destination
+        while current != source and current is not None:
+            prev_node = previous_nodes[current]
+            if prev_node is None:
+                return None
+            path_edges.insert(0, tuple(sorted((prev_node, current))))
+            current = prev_node
+
+        if current != source:
+            return None
+
+        return path_edges
+
+
+if __name__ == '__main__':
+    from environment.topology import create_nsfnet_topology
+    from environment.traffic_generator import RandomTrafficGenerator
+
+    test_topology_data = create_nsfnet_topology()
+    test_num_wavelengths = 10
+    test_traffic_generator = RandomTrafficGenerator(
+        arrival_rate=0.5, duration_mean=5)
+
+    env = EONEnvironment(test_topology_data,
+                         test_num_wavelengths, test_traffic_generator)
+
+    state = env.reset()
+    print("Initial State:", state)
+
+    request = env.get_next_service_request()
+    if request:
+        print("Service Request:", request)
+
+        test_action = 0
+        next_state, test_reward, test_done, test_info = env.step(test_action)
+        print("Next State:", next_state)
+        print("Reward:", test_reward)
+        print("Done:", test_done)
+        print("Info:", test_info)
+    else:
+        print("No service request generated.")
+
+  environment/__pycache__
+    environment/__pycache__/traffic_generator.cpython-36.pyc
+      (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+    environment/__pycache__/eon_env.cpython-312.pyc
+      (Binary or unsupported file type: application/octet-stream - skipping content)
+    environment/__pycache__/topology.cpython-312.pyc
+      (Binary or unsupported file type: application/octet-stream - skipping content)
+    environment/__pycache__/eon_env.cpython-36.pyc
+      (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+    environment/__pycache__/traffic_generator.cpython-312.pyc
+      (Binary or unsupported file type: application/octet-stream - skipping content)
+    environment/__pycache__/topology.cpython-36.pyc
+      (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+  environment/__pycache__/traffic_generator.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+  environment/__pycache__/eon_env.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+  environment/__pycache__/topology.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+  environment/__pycache__/eon_env.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+  environment/__pycache__/traffic_generator.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+  environment/__pycache__/topology.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+  environment/topology.py
+    Contents of: environment/topology.py
+def create_nsfnet_topology():
+    nodes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+
+    edges = [(1, 2), (1, 3), (1, 4), (2, 3), (2, 5), (3, 6), (4, 7), (5, 8), (6, 9), (7, 10),
+             (8, 11), (9, 12), (10, 13), (11, 14), (12, 13), (13, 14), (4, 5),
+             (6, 7), (8, 9), (10, 11), (12, 14), (1, 14)]
+    adjacency_list = {node: [] for node in nodes}
+    for u, v in edges:
+        adjacency_list[u].append(v)
+        adjacency_list[v].append(u)
+
+    topology_data = {
+        'nodes': nodes,
+        'edges': edges,
+        'adjacency_list': adjacency_list
+    }
+    return topology_data
+
+environment/traffic_generator.py
+  Contents of: environment/traffic_generator.py
+import random
+
+
+class RandomTrafficGenerator:
+    """
+    arrival_rate (float): Toc do den trung binh cua cac yeu cau dich vu (Poisson)
+    duration_mean (float): Thoi luong trung binh cua cac yeu cau dich vu (Cap so nhan)
+    demand (int): Luong bang thong yeu cau cho moi dich vu
+    """
+
+    def __init__(self, arrival_rate, duration_mean):
+        self.arrival_rate = arrival_rate
+        self.duration_mean = duration_mean
+        self.service_id_counter = 0
+
+    def generate_request(self, nodes):
+        if random.random() < self.arrival_rate:
+            self.service_id_counter += 1
+            source, destination = random.sample(nodes, 2)
+            demand = random.randint(10, 100)
+            duration = random.expovariate(1.0 / self.duration_mean)
+
+            return {
+                'service_id': self.service_id_counter,
+                'source': source,
+                'destination': destination,
+                'demand': demand,
+                'duration': duration
+            }
+        return None
+
+environment/eon_env.py
+  Contents of: environment/eon_env.py
+import numpy as np
+
+
+class EONEnvironment:
+    def __init__(self, topology_data, num_wavelengths, traffic_generator):
+        """
+        topology_data (dict): (cac node, cac canh, danh sach lien ket)
+        num_wavelengths (int): So luong buoc song moi lien ket
+        traffic_generator (TrafficGenerator)
+        """
+        self.nodes = topology_data['nodes']
+        self.edges = topology_data['edges']
+        self.adjacency_list = topology_data['adjacency_list']
+        self.num_wavelengths = num_wavelengths
+        self.traffic_generator = traffic_generator
+        self.current_service_request = None
+        self.reset()
+
+    def reset(self):
+        self.wavelength_usage = {
+            edge: np.zeros(self.num_wavelengths, dtype=int) for edge in self.edges
+        }
+        self.current_service_request = None
+        self.service_history = []
+        return self._get_state()
+
+    def step(self, action):
+        """
+        Thuc hien action trong environment va tra ve next state, reward, done
+        action (int): Chi so buoc song duoc gan
+        """
+        reward = 0
+        done = False
+        info = {}
+
+        if self.current_service_request is None:
+            done = True
+            reward = 0
+            return self._get_state(), reward, done, info
+
+        if action == -1:
+            reward = -1
+            info['action_taken'] = 'block'
+            info['wavelength_assigned'] = -1
+            self.service_history.append(
+                {'request': self.current_service_request, 'action': 'blocked'})
+            done = True
+        else:
+            wavelength_index = action
+            path = self.current_service_request['path']
+            if self._is_wavelength_available(path, wavelength_index):
+                self._assign_wavelength(path, wavelength_index)
+                reward = 1
+                info['action_taken'] = 'assign'
+                info['wavelength_assigned'] = wavelength_index
+                self.service_history.append(
+                    {'request': self.current_service_request, 'action': 'assigned', 'wavelength': wavelength_index})
+                done = True
+            else:
+                reward = -10
+                info['action_taken'] = 'invalid_assign'
+                info['wavelength_assigned'] = -1
+                done = True
+        self.current_service_request = None
+        return self._get_state(), reward, done, info
+
+    def _get_state(self):
+        return np.array([self.wavelength_usage[edge] for edge in self.edges]).flatten()
+
+    def get_next_service_request(self):
+        self.current_service_request = self.traffic_generator.generate_request(
+            self.nodes)
+        if self.current_service_request:
+            source = self.current_service_request['source']
+            destination = self.current_service_request['destination']
+            self.current_service_request['path'] = self._shortest_path(
+                source, destination)
+        return self.current_service_request
+
+    def _is_wavelength_available(self, path, wavelength_index):
+        for edge in path:
+            if self.wavelength_usage[edge][wavelength_index] == 1:
+                return False
+        return True
+
+    def _assign_wavelength(self, path, wavelength_index):
+        for edge in path:
+            self.wavelength_usage[edge][wavelength_index] = 1
+
+    def _shortest_path(self, source, destination):
+        """
+        Return:
+            list: list of edges
+            None: Neu khong ton tai duong di
+        """
+        distances = {node: float('inf') for node in self.nodes}
+        previous_nodes = {node: None for node in self.nodes}
+        distances[source] = 0
+        unvisited_nodes = set(self.nodes)
+
+        while unvisited_nodes:
+            current_node = min(
+                unvisited_nodes, key=lambda node: distances[node])
+            unvisited_nodes.remove(current_node)
+
+            if distances[current_node] == float('inf'):
+                break
+
+            if current_node == destination:
+                break
+
+            for neighbor in self.adjacency_list[current_node]:
+                weight = 1
+                distance = distances[current_node] + weight
+
+                if distance < distances[neighbor]:
+                    distances[neighbor] = distance
+                    previous_nodes[neighbor] = current_node
+
+        path_edges = []
+        current = destination
+        while current != source and current is not None:
+            prev_node = previous_nodes[current]
+            if prev_node is None:
+                return None
+            path_edges.insert(0, tuple(sorted((prev_node, current))))
+            current = prev_node
+
+        if current != source:
+            return None
+
+        return path_edges
+
+
+if __name__ == '__main__':
+    from environment.topology import create_nsfnet_topology
+    from environment.traffic_generator import RandomTrafficGenerator
+
+    test_topology_data = create_nsfnet_topology()
+    test_num_wavelengths = 10
+    test_traffic_generator = RandomTrafficGenerator(
+        arrival_rate=0.5, duration_mean=5)
+
+    env = EONEnvironment(test_topology_data,
+                         test_num_wavelengths, test_traffic_generator)
+
+    state = env.reset()
+    print("Initial State:", state)
+
+    request = env.get_next_service_request()
+    if request:
+        print("Service Request:", request)
+
+        test_action = 0
+        next_state, test_reward, test_done, test_info = env.step(test_action)
+        print("Next State:", next_state)
+        print("Reward:", test_reward)
+        print("Done:", test_done)
+        print("Info:", test_info)
+    else:
+        print("No service request generated.")
+
+environment/__pycache__
+  environment/__pycache__/traffic_generator.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+  environment/__pycache__/eon_env.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+  environment/__pycache__/topology.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+  environment/__pycache__/eon_env.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+  environment/__pycache__/traffic_generator.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+  environment/__pycache__/topology.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+environment/__pycache__/traffic_generator.cpython-36.pyc
+  (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+environment/__pycache__/eon_env.cpython-312.pyc
+  (Binary or unsupported file type: application/octet-stream - skipping content)
+environment/__pycache__/topology.cpython-312.pyc
+  (Binary or unsupported file type: application/octet-stream - skipping content)
+environment/__pycache__/eon_env.cpython-36.pyc
+  (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+environment/__pycache__/traffic_generator.cpython-312.pyc
+  (Binary or unsupported file type: application/octet-stream - skipping content)
+environment/__pycache__/topology.cpython-36.pyc
+  (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+environment/topology.py
+  Contents of: environment/topology.py
+def create_nsfnet_topology():
+    nodes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+
+    edges = [(1, 2), (1, 3), (1, 4), (2, 3), (2, 5), (3, 6), (4, 7), (5, 8), (6, 9), (7, 10),
+             (8, 11), (9, 12), (10, 13), (11, 14), (12, 13), (13, 14), (4, 5),
+             (6, 7), (8, 9), (10, 11), (12, 14), (1, 14)]
+    adjacency_list = {node: [] for node in nodes}
+    for u, v in edges:
+        adjacency_list[u].append(v)
+        adjacency_list[v].append(u)
+
+    topology_data = {
+        'nodes': nodes,
+        'edges': edges,
+        'adjacency_list': adjacency_list
+    }
+    return topology_data
+
+agent
+  agent/drl_agent.py
+    Contents of: agent/drl_agent.py
+import torch
+import torch.distributions
+import numpy as np
+import torch.optim as optim
+from agent.model import ActorCriticNetwork
+
+
+class DRLAgent:
+    def __init__(self, state_size, action_size, learning_rate=1e-3, gamma=0.99):
+        self.actor_critic = ActorCriticNetwork(state_size, action_size)
+        self.optimizer = optim.Adam(
+            self.actor_critic.parameters(), lr=learning_rate)
+        self.gamma = gamma
+
+    def select_action(self, state):
+        # Chuyen doi dinh dang input
+        state = torch.FloatTensor(state).unsqueeze(0)
+        probs, value = self.actor_critic(state)
+        # Tra ve object cho phan bo xac suat cua cac hanh dong
+        action_prob = torch.distributions.Categorical(probs)
+        # Tra ve action ngau nhien, dua tren phan bo xac suat cua cac hanh dong
+        action = action_prob.sample()
+        return action.item(), probs, value
+
+    def update_model(self, rewards, log_probs, values, next_values, dones):
+        """
+        log_probs (list): Danh sach gia tri logarit cua xac suat moi action tai mot step
+        dones (list): Xac dinh episode da hoan thanh tai step day chua
+        """
+        rewards = torch.FloatTensor(rewards)
+        values = torch.FloatTensor(values)
+        log_probs = torch.stack(log_probs)
+        next_values = torch.FloatTensor(next_values)
+        dones = torch.FloatTensor(dones)
+
+        advantages = rewards + self.gamma * next_values * (1 - dones) - values
+        actor_loss = (-log_probs * advantages.detach()).mean()
+        critic_loss = advantages.pow(2).mean()
+        total_loss = actor_loss + critic_loss
+
+        self.optimizer.zero_grad()
+        total_loss.backward()
+        # Thuc hien cap nhat tham so cua mo hinh
+        self.optimizer.step()
+        return actor_loss.item(), critic_loss.item(), total_loss.item()
+
+    def save_model(self, filepath):
+        torch.save(self.actor_critic.state_dict(), filepath)
+
+    def load_model(self, filepath):
+        self.actor_critic.load_state_dict(torch.load(filepath))
+
+
+if __name__ == '__main__':
+    test_state_size = 140
+    test_action_size = 11
+
+    agent = DRLAgent(test_state_size, test_action_size)
+    dummy_state = np.random.rand(test_state_size)
+    test_action, test_probs, test_value = agent.select_action(dummy_state)
+    print("Selected Action:", test_action)
+    print("Action Probabilities", test_probs)
+    print("Value:", test_value)
+
+  agent/model.py
+    Contents of: agent/model.py
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class ActorCriticNetwork(nn.Module):
+    def __init__(self, state_size, action_size):
+        super(ActorCriticNetwork, self).__init__()
+        self.shared_layers = nn.Sequential(
+            nn.Linear(state_size, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU()
+        )
+
+        # Output cho xac suat cua cac hanh dong
+        self.actor_head = nn.Linear(64, action_size)
+        # Output cho gia tri trang thai
+        self.critic_head = nn.Linear(64, 1)
+
+    def forward(self, state):
+        shared_features = self.shared_layers(state)
+        action_probs = F.softmax(self.actor_head(shared_features), dim=-1)
+        state_value = self.critic_head(shared_features)
+        return action_probs, state_value
+
+  agent/__pycache__
+    agent/__pycache__/model.cpython-312.pyc
+      (Binary or unsupported file type: application/octet-stream - skipping content)
+    agent/__pycache__/drl_agent.cpython-36.pyc
+      (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+    agent/__pycache__/drl_agent.cpython-312.pyc
+      (Binary or unsupported file type: application/octet-stream - skipping content)
+    agent/__pycache__/model.cpython-36.pyc
+      (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+  agent/__pycache__/model.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+  agent/__pycache__/drl_agent.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+  agent/__pycache__/drl_agent.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+  agent/__pycache__/model.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+agent/drl_agent.py
+  Contents of: agent/drl_agent.py
+import torch
+import torch.distributions
+import numpy as np
+import torch.optim as optim
+from agent.model import ActorCriticNetwork
+
+
+class DRLAgent:
+    def __init__(self, state_size, action_size, learning_rate=1e-3, gamma=0.99):
+        self.actor_critic = ActorCriticNetwork(state_size, action_size)
+        self.optimizer = optim.Adam(
+            self.actor_critic.parameters(), lr=learning_rate)
+        self.gamma = gamma
+
+    def select_action(self, state):
+        # Chuyen doi dinh dang input
+        state = torch.FloatTensor(state).unsqueeze(0)
+        probs, value = self.actor_critic(state)
+        # Tra ve object cho phan bo xac suat cua cac hanh dong
+        action_prob = torch.distributions.Categorical(probs)
+        # Tra ve action ngau nhien, dua tren phan bo xac suat cua cac hanh dong
+        action = action_prob.sample()
+        return action.item(), probs, value
+
+    def update_model(self, rewards, log_probs, values, next_values, dones):
+        """
+        log_probs (list): Danh sach gia tri logarit cua xac suat moi action tai mot step
+        dones (list): Xac dinh episode da hoan thanh tai step day chua
+        """
+        rewards = torch.FloatTensor(rewards)
+        values = torch.FloatTensor(values)
+        log_probs = torch.stack(log_probs)
+        next_values = torch.FloatTensor(next_values)
+        dones = torch.FloatTensor(dones)
+
+        advantages = rewards + self.gamma * next_values * (1 - dones) - values
+        actor_loss = (-log_probs * advantages.detach()).mean()
+        critic_loss = advantages.pow(2).mean()
+        total_loss = actor_loss + critic_loss
+
+        self.optimizer.zero_grad()
+        total_loss.backward()
+        # Thuc hien cap nhat tham so cua mo hinh
+        self.optimizer.step()
+        return actor_loss.item(), critic_loss.item(), total_loss.item()
+
+    def save_model(self, filepath):
+        torch.save(self.actor_critic.state_dict(), filepath)
+
+    def load_model(self, filepath):
+        self.actor_critic.load_state_dict(torch.load(filepath))
+
+
+if __name__ == '__main__':
+    test_state_size = 140
+    test_action_size = 11
+
+    agent = DRLAgent(test_state_size, test_action_size)
+    dummy_state = np.random.rand(test_state_size)
+    test_action, test_probs, test_value = agent.select_action(dummy_state)
+    print("Selected Action:", test_action)
+    print("Action Probabilities", test_probs)
+    print("Value:", test_value)
+
+agent/model.py
+  Contents of: agent/model.py
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class ActorCriticNetwork(nn.Module):
+    def __init__(self, state_size, action_size):
+        super(ActorCriticNetwork, self).__init__()
+        self.shared_layers = nn.Sequential(
+            nn.Linear(state_size, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU()
+        )
+
+        # Output cho xac suat cua cac hanh dong
+        self.actor_head = nn.Linear(64, action_size)
+        # Output cho gia tri trang thai
+        self.critic_head = nn.Linear(64, 1)
+
+    def forward(self, state):
+        shared_features = self.shared_layers(state)
+        action_probs = F.softmax(self.actor_head(shared_features), dim=-1)
+        state_value = self.critic_head(shared_features)
+        return action_probs, state_value
+
+agent/__pycache__
+  agent/__pycache__/model.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+  agent/__pycache__/drl_agent.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+  agent/__pycache__/drl_agent.cpython-312.pyc
+    (Binary or unsupported file type: application/octet-stream - skipping content)
+  agent/__pycache__/model.cpython-36.pyc
+    (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+agent/__pycache__/model.cpython-312.pyc
+  (Binary or unsupported file type: application/octet-stream - skipping content)
+agent/__pycache__/drl_agent.cpython-36.pyc
+  (Binary or unsupported file type: application/x-bytecode.python - skipping content)
+agent/__pycache__/drl_agent.cpython-312.pyc
+  (Binary or unsupported file type: application/octet-stream - skipping content)
+agent/__pycache__/model.cpython-36.pyc
+  (Binary or unsupported file type: application/x-bytecode.python - skipping content)

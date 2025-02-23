@@ -32,7 +32,7 @@ def train_drl_agent(env, agent, num_episodes, max_steps_per_episode, update_freq
             values.append(value)
 
             next_values.append(agent.actor_critic(
-                torch.FloatTendor(next_state).unsqueeze(0))[1])
+                torch.FloatTensor(next_state).unsqueeze(0))[1])
 
             state = next_state
             if done:

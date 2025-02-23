@@ -1,2 +1,63 @@
 2025-02-24 00:23:54 - utils.logger - INFO - Starting simulation
 2025-02-24 00:23:55 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 00:48:28 - utils.logger - INFO - Starting simulation
+2025-02-24 00:48:28 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 00:52:19 - utils.logger - INFO - Starting simulation
+2025-02-24 00:52:19 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 00:56:45 - utils.logger - INFO - Starting simulation
+2025-02-24 00:56:45 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 00:56:45 - utils.logger - INFO - Episode 1/1000, Average Reward: nan
+2025-02-24 00:56:45 - utils.logger - INFO - Episode 2/1000, Average Reward: nan
+2025-02-24 01:24:42 - utils.logger - INFO - Starting simulation
+2025-02-24 01:24:42 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 01:24:42 - utils.logger - INFO - Episode 1/1000, Average Reward: nan
+2025-02-24 01:24:42 - utils.logger - INFO - Episode 2/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Starting simulation
+2025-02-24 01:25:45 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 1/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 2/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 3/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 4/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO -  Model update - Actor Loss: nan, Critic Loss: nan, Total Loss: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 5/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 6/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 7/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 8/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO -  Model update - Actor Loss: nan, Critic Loss: nan, Total Loss: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 9/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 10/1000, Average Reward: nan
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 11/1000, Average Reward: 1.0000
+2025-02-24 01:25:45 - utils.logger - INFO - Episode 12/1000, Average Reward: nan
+2025-02-24 01:31:11 - utils.logger - INFO - Starting simulation
+2025-02-24 01:31:11 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 01:38:53 - utils.logger - INFO - Starting simulation
+2025-02-24 01:38:53 - utils.logger - INFO - Starting DRL agent training ...
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 1/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 2/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 3/1000, Average Reward: nan
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 4/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO -  Model update - Actor Loss: nan, Critic Loss: nan, Total Loss: nan
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 5/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 6/1000, Average Reward: nan
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 7/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 8/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO -  Model update - Actor Loss: nan, Critic Loss: nan, Total Loss: nan
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 9/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 10/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 11/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 12/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO -  Model update - Actor Loss: nan, Critic Loss: nan, Total Loss: nan
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 13/1000, Average Reward: nan
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 14/1000, Average Reward: nan
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 15/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 16/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO -  Model update - Actor Loss: nan, Critic Loss: nan, Total Loss: nan
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 17/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 18/1000, Average Reward: -10.0000
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 19/1000, Average Reward: -4.5000
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 20/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO -  Model update - Actor Loss: nan, Critic Loss: nan, Total Loss: nan
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 21/1000, Average Reward: -4.5000
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 22/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 23/1000, Average Reward: 1.0000
+2025-02-24 01:38:53 - utils.logger - INFO - Episode 24/1000, Average Reward: nan

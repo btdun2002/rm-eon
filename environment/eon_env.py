@@ -47,20 +47,26 @@ class EONEnvironment:
             done = True
         else:
             wavelength_index = action
-            path = self.current_service_request['path']
-            if self._is_wavelength_available(path, wavelength_index):
-                self._assign_wavelength(path, wavelength_index)
-                reward = 1
-                info['action_taken'] = 'assign'
-                info['wavelength_assigned'] = wavelength_index
-                self.service_history.append(
-                    {'request': self.current_service_request, 'action': 'assigned', 'wavelength': wavelength_index})
-                done = True
+            if 0 <= wavelength_index < self.num_wavelengths:
+                path = self.current_service_request['path']
+                if self._is_wavelength_available(path, wavelength_index):
+                    self._assign_wavelength(path, wavelength_index)
+                    reward = 1
+                    info['action_taken'] = 'assign'
+                    info['wavelength_assigned'] = wavelength_index
+                    self.service_history.append(
+                        {'request': self.current_service_request, 'action': 'assigned', 'wavelength': wavelength_index})
+                    done = True
+                else:
+                    reward = -10
+                    info['action_taken'] = 'invalid_assign'
+                    info['wavelength_assigned'] = -1
+                    done = True
             else:
                 reward = -10
-                info['action_taken'] = 'invalid_assign'
+                info['action_taken'] = 'invalid_action_index'
                 info['wavelength_assigned'] = -1
-                done = True
+                print(f"action = {action}")
         self.current_service_request = None
         return self._get_state(), reward, done, info
 
@@ -96,11 +102,9 @@ class EONEnvironment:
         distances = {node: float('inf') for node in self.nodes}
         previous_nodes = {node: None for node in self.nodes}
         distances[source] = 0
-        #
         unvisited_nodes = set(self.nodes)
 
         while unvisited_nodes:
-            #
             current_node = min(
                 unvisited_nodes, key=lambda node: distances[node])
             unvisited_nodes.remove(current_node)
@@ -115,8 +119,8 @@ class EONEnvironment:
                 weight = 1
                 distance = distances[current_node] + weight
 
-                if distance < distance[neighbor]:
-                    distances[neighbor] = distances
+                if distance < distances[neighbor]:
+                    distances[neighbor] = distance
                     previous_nodes[neighbor] = current_node
 
         path_edges = []

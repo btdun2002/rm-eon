@@ -19,7 +19,7 @@ class RandomTrafficGenerator:
             source, destination = random.sample(nodes, 2)
             demand = random.randint(10, 100)
             duration = random.expovariate(1.0 / self.duration_mean)
-
+            print("Request is generated")
             return {
                 'service_id': self.service_id_counter,
                 'source': source,
@@ -27,4 +27,5 @@ class RandomTrafficGenerator:
                 'demand': demand,
                 'duration': duration
             }
+        print("Request is not generated")
         return None
