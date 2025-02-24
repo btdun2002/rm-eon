@@ -16,7 +16,7 @@ class Config:
         self.evaluation_episodes = 100
 
         self.results_dir = "results/"
-        self.model_save_path = "results/drl_agent_model.d"
+        self.model_save_path = "results/drl_agent_model.pth"
 
 
 config = Config()
