@@ -62,7 +62,7 @@ def evaluate_algorithms(env, drl_agent, num_episodes, logger):
 
     logger.info("Evaluating ActorCriticNetwork ...")
     drl_agent.load_model(config.model_save_path)
-    drl_agent.actor_critice.eval()
+    drl_agent.actor_critic.eval()
     blocked_request_drl = 0
     for episode in range(num_episodes):
         state = env.reset()
