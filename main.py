@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from environment.eon_env import EONEnvironment
-from environment.topology import create_nsfnet_topology
+from environment.topology import create_nsfnet_topology, create_random_erdos_renyi_topology
 from environment.traffic_generator import RandomTrafficGenerator
 from agent.drl_agent import DRLAgent
 from utils.config import config
@@ -93,7 +93,7 @@ def main():
     logger = setup_logging()
     logger.info("Starting simulation")
 
-    topology_data = create_nsfnet_topology()
+    topology_data = create_random_erdos_renyi_topology()
     traffic_generator = RandomTrafficGenerator(
         config.arrival_rate, config.duration_mean)
     env = EONEnvironment(

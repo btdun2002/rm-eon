@@ -71,7 +71,21 @@ class EONEnvironment:
         return self._get_state(), reward, done, info
 
     def _get_state(self):
-        return np.array([self.wavelength_usage[edge] for edge in self.edges]).flatten()
+        state_components = []
+        for edge in self.edges:
+            usage = self.wavelength_usage[edge]
+            remaining_capacity = self.num_wavelengths - np.sum(usage)
+            state_components.extend([remaining_capacity])
+
+        if self.current_service_request:
+            state_components.extend([
+                self.current_service_request['source'],
+                self.current_service_request['destination'],
+                self.current_service_request['demand']
+            ])
+        else:
+            state_components.extend([0, 0, 0])
+        return np.array(state_components).flatten()
 
     def get_next_service_request(self):
         self.current_service_request = self.traffic_generator.generate_request(

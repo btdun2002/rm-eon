@@ -1,9 +1,9 @@
 class Config:
     def __init__(self):
         self.topology_type = "NSFNET"
-        self.num_wavelengths = 10
+        self.num_wavelengths = 50
 
-        self.arrival_rate = 0.8
+        self.arrival_rate = 2.0
         self.duration_mean = 5
 
         self.learning_rate = 1e-3
