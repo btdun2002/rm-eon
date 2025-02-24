@@ -1,7 +1,7 @@
 import logging
 
 
-def setup_logging(log_file="results/training.log", level=logging.INFO):
+def setup_logging(log_file="results/training.log.txt", level=logging.INFO):
     logger = logging.getLogger(__name__)
     logger.setLevel(level)
 

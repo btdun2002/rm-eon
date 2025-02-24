@@ -13,7 +13,7 @@ script_file="$(basename "$0")"
 exclude_patterns=( "__pycache__/*" ".git/*")
 
 # Files whose contents should be excluded (but listed)
-exclude_contents=( "training.log" "$output_file" "$script_file")
+exclude_contents=( "training.log.txt" "$output_file" "$script_file")
 
 # Function to recursively traverse...
 traverse_and_output() {
